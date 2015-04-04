@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2015/03/06 14:33:34.000.986,=H:\Download\Telephony\Switch\Unit1.pas</Transaction>
+    <Transaction>2015/03/06 14:33:44.000.745,H:\Download\Telephony\Switch\uSwitchTerminal.pas=H:\Download\Telephony\Switch\Unit1.pas</Transaction>
+    <Transaction>2015/03/06 14:35:31.000.953,=H:\Download\Telephony\Core\EventSink.pas</Transaction>
+    <Transaction>2015/03/10 15:09:32.000.943,H:\Download\Telephony\Switch\uSwitchTerminal.pas=H:\Download\Telephony\Switch\uSwitchClientl.pas</Transaction>
+    <Transaction>2015/03/10 15:09:39.000.208,H:\Download\Telephony\Switch\uSwitchClientl.pas=H:\Download\Telephony\Switch\uSwitchClient.pas</Transaction>
+    <Transaction>2015/03/11 04:51:17.000.214,D:\Projects\Netgao\CallCenter\Telephony\Switch\uSwitchController.pas=</Transaction>
+    <Transaction>2015/03/11 06:26:28.000.834,=D:\Projects\Netgao\CallCenter\Telephony\Switch\Unit1.pas</Transaction>
+    <Transaction>2015/03/11 06:26:50.000.742,D:\Projects\Netgao\CallCenter\Telephony\Switch\Unit1.pas=D:\Projects\Netgao\CallCenter\Telephony\Switch\uPipeMessageHandler.pas</Transaction>
+    <Transaction>2015/03/11 06:33:39.000.363,D:\Projects\Netgao\CallCenter\Telephony\Switch\uPipeMessageHandler.pas=</Transaction>
+    <Transaction>2015/03/12 11:07:05.000.005,=H:\Download\Telephony\Switch\Unit1.pas</Transaction>
+    <Transaction>2015/03/12 11:07:18.000.031,H:\Download\Telephony\Switch\uPipeConnection.pas=H:\Download\Telephony\Switch\Unit1.pas</Transaction>
+    <Transaction>2015/03/12 16:53:21.000.946,H:\Download\Telephony\Switch\uPipeSession.pas=H:\Download\Telephony\Switch\uPipeConnection.pas</Transaction>
+    <Transaction>2015/03/12 17:14:26.000.076,H:\Download\Telephony\Switch\uSwitchPipeSession.pas=H:\Download\Telephony\Switch\uSwitchPipeServer.pas</Transaction>
+    <Transaction>2015/03/13 01:28:08.000.187,D:\Projects\Netgao\CallCenter\Telephony\Switch\uSwitchPipeSession.pas=D:\Projects\Netgao\CallCenter\Telephony\Switch\uSwitchPipeServer.pas</Transaction>
+    <Transaction>2015/03/13 01:57:17.000.790,D:\Projects\Netgao\CallCenter\Telephony\Switch\uSwitchPipeServer.pas=D:\Projects\Netgao\CallCenter\Telephony\Switch\uSwitchPipeSession.pas</Transaction>
+    <Transaction>2015/03/13 03:11:04.000.078,D:\Projects\Netgao\CallCenter\Telephony\Switch\uSwitchPipeSession.pas=D:\Projects\Netgao\CallCenter\Telephony\Switch\uSwitchPipeServer.pas</Transaction>
+    <Transaction>2015/03/13 03:33:23.000.610,=D:\Projects\Netgao\CallCenter\Telephony\Switch\uPipeConnection.pas</Transaction>
+    <Transaction>2015/03/24 14:00:50.000.073,H:\Download\Telephony\Switch\uSwitchRequestDispatcher.pas=</Transaction>
+    <Transaction>2015/03/29 08:39:28.000.709,D:\Projects\Netgao\CallCenter\Telephony\Switch\uThreadQueue.pas=D:\Projects\Netgao\CallCenter\Telephony\Switch\uPipeQueue.pas</Transaction>
+    <Transaction>2015/03/29 08:46:11.000.295,=D:\Projects\Netgao\CallCenter\Telephony\Switch\Unit1.pas</Transaction>
+    <Transaction>2015/03/29 08:46:26.000.262,D:\Projects\Netgao\CallCenter\Telephony\Switch\Unit1.pas=D:\Projects\Netgao\CallCenter\Telephony\Switch\uSwitchThread.pas</Transaction>
+    <Transaction>2015/03/29 08:47:17.000.699,D:\Projects\Netgao\CallCenter\Telephony\Switch\uSwitchThread.pas=</Transaction>
+    <Transaction>2015/03/30 14:41:20.000.792,H:\Download\Telephony\Switch\uSwitchProcessor.pas=</Transaction>
+    <Transaction>2015/03/31 13:12:46.000.147,H:\Download\Telephony\Switch\uPipeQueue.pas=</Transaction>
+  </Transactions>
+</BorlandProject>
