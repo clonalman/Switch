@@ -175,7 +175,6 @@ var
   lRoot: IXMLNode;
   I: Integer;
   lKey: string;
-  S: TStrings;
 begin
   FName := '';
   FIsError := False;

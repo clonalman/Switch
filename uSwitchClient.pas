@@ -24,12 +24,7 @@ type
     FConnections: TThreadList;
     FContext: TSwitchContext;
     FSwitch: TSwitch;
-    procedure MakeMessage(AMessage: TPipeMessage; Address: IAddress); overload;
-    procedure MakeMessage(AMessage: TPipeMessage; Call: ICall); overload;
-    procedure MakeMessage(AMessage: TPipeMessage; CallLog: ICallLog); overload;
-    procedure MakeMessage(AMessage: TPipeMessage; Line: ILine); overload;
-    procedure MakeMessage(AMessage: TPipeMessage; Terminal: ITerminal);
-        overload;
+
     procedure OnAcceptCall(Sender: TObject; const Terminal: ITerminal; const
         Call: ICall);
     procedure OnAnswerCall(Sender: TObject; const Terminal: ITerminal; const
@@ -74,6 +69,15 @@ type
     procedure Send(Terminal: ITerminal; Call: ICall; Topic: string); overload;
     procedure Send(Terminal: ITerminal; oldState, newState: TERMINAL_STATE;
         Topic: string); overload;
+    procedure Send(Terminal: ITerminal; RecordLog: IRecordLog; Topic: string);overload;
+
+    procedure MakeMessage(AMessage: TPipeMessage; Address: IAddress); overload;
+    procedure MakeMessage(AMessage: TPipeMessage; Call: ICall); overload;
+    procedure MakeMessage(AMessage: TPipeMessage; CallLog: ICallLog); overload;
+    procedure MakeMessage(AMessage: TPipeMessage; Line: ILine); overload;
+    procedure MakeMessage(AMessage: TPipeMessage; Terminal: ITerminal);
+        overload;
+    procedure MakeMessage(AMessage: TPipeMessage; RecordLog: IRecordLog);overload;
   public
     constructor Create(AOwner: TNamedPipeServer);
     destructor Destroy; override;
@@ -83,6 +87,7 @@ type
 
 implementation
 
+{
 type
 
 TLineState = (lsStandby, lsPickuped, lsRinging, lsDialing, lsWaitDialTone,
@@ -108,12 +113,11 @@ TCallState = (
   CALL_STATE_CONFERENCE
   );
 
+  }
 {
 ******************************** TSwitchClient *********************************
 }
 constructor TSwitchClient.Create(AOwner: TNamedPipeServer);
-var
-  i: Integer;
 begin
   inherited Create(AOwner);
   FConnections := AOwner.Connections;
@@ -170,65 +174,6 @@ begin
   inherited Destroy;
 end;
 
-procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; Address: IAddress);
-begin
-  AMessage.Data['name'] := Address.Name;
-  AMessage.Data['number'] := Address.Number;
-  AMessage.Data['state'] := UIntToStr(Address.State);
-  AMessage.Data['now'] := DateTimeToStr(Now);
-end;
-
-procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; Call: ICall);
-var
-  Log: ICallLog;
-begin
-  if Supports(Call, ICallLog, Log) then
-  begin
-    MakeMessage(AMessage, Log);
-  end;
-end;
-
-procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; CallLog: ICallLog);
-begin
-  AMessage.Data['instanceId'] := GuidToString(CallLog.InstanceId);
-  AMessage.Data['sessionId'] := CallLog.SessionId;
-  AMessage.Data['callerId'] := CallLog.CallerId;
-  AMessage.Data['calleeId'] := CallLog.CalleeId;
-  AMessage.Data['accessCode'] := CallLog.AccessCode;
-  AMessage.Data['exitState'] := UIntToStr(CallLog.ExitState);
-  AMessage.Data['direction'] := UIntToStr(CallLog.Direction);
-  AMessage.Data['start'] := DateTimeToStr(CallLog.StartTime);
-  AMessage.Data['end'] := DateTimeToStr(CallLog.EndTime);
-  AMessage.Data['wait'] := FloatToStrF(CallLog.WaitDuration,ffFixed,10,2);
-  AMessage.Data['talk'] := FloatToStrF(CallLog.TalkDuration,ffFixed,10,2);
-  AMessage.Data['now'] := DateTimeToStr(Now);
-end;
-
-procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; Line: ILine);
-begin
-  AMessage.Data['callerId'] := Line.CallerId;
-  AMessage.Data['calleeId'] := Line.CalleeId;
-  AMessage.Data['state'] := UIntToStr(Line.LineState);
-  MakeMessage(AMessage, Line.Address);
-  if Assigned(Line.ActiveCall) then
-  begin
-    MakeMessage(AMessage, Line.ActiveCall);
-  end;
-  AMessage.Data['now'] := DateTimeToStr(Now);
-end;
-
-procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; Terminal:
-    ITerminal);
-begin
-  AMessage.Data['name'] := Terminal.Name;
-  AMessage.Data['pad'] := Terminal.Pad;
-  AMessage.Data['sig'] := UIntToStr(Terminal.Sig);// GetEnumName(TypeInfo(SIGNALING), Terminal.Sig)
-  if Assigned(Terminal.ActiveLine) then
-  begin
-    MakeMessage(AMessage, Terminal.ActiveLine);
-  end;
-  AMessage.Data['now'] := DateTimeToStr(Now);
-end;
 
 procedure TSwitchClient.OnAcceptCall(Sender: TObject; const Terminal: ITerminal;
     const Call: ICall);
@@ -264,27 +209,24 @@ begin
   end;
 end;
 
-procedure TSwitchClient.OnDivertCall(Sender: TObject; const Terminal: ITerminal;
-    const Call: ICall);
-begin
-  Send(terminal, call, 'call-divert');
-end;
 
 procedure TSwitchClient.OnHangup(Sender: TObject; const Terminal: ITerminal);
+var
+  i: Integer;
+  recordLog: IRecordLog;
 begin
   Send(Terminal, 'call-hangup');
-  {
+
   with Terminal.Records do
   begin
     for i := 0 to Pred(Count) do
     begin
       if VarSupports(Item[i], IRecordLog, recordLog) then
       begin
-        FList.Add(Format('--RecordLog(%d, ''%s'') - (%s)', [Terminal.Id, recordLog.Pad, recordLog.AudioFileName]));
+        Send(Terminal, recordLog, 'call-record');
       end;
     end;
   end;
-  }
 end;
 
 procedure TSwitchClient.OnHoldCall(Sender: TObject; const Terminal: ITerminal;
@@ -297,13 +239,6 @@ procedure TSwitchClient.OnIncomingCall(Sender: TObject; const Terminal:
     ITerminal; const Call: ICall);
 begin
   Send(Terminal, Call, 'call-incoming');
-  {
-  FList.Add(Format('OnIncomingCall(%d, ''%s'', ''%s'', %d) - %s(%s)',
-    [Terminal.Id, Call.CallerId, Call.CalleeId, (Call as ICallLog).ExitState,
-     GetEnumName(TypeInfo(TCallState), (Call as ICallLog).ExitState),
-     GuidToString((Call as ICallLog).InstanceId)
-    ]));
-  }
 end;
 
 procedure TSwitchClient.OnInit(Sender: TObject; const Terminal: ITerminal);
@@ -313,20 +248,70 @@ end;
 
 procedure TSwitchClient.OnJoinCall(Sender: TObject; const Terminal: ITerminal;
     const Call: ICall);
+var
+  i: Integer;
+  line: ILine;
 begin
-  Send(terminal, call, 'call-join');
+  with call.Inclusions do
+  begin
+    for i := 0 to Pred(Count) do
+    begin
+      if VarSupports(Item[i], ILine, line) then
+      begin
+        Send(line.Terminal, call, 'call-join');
+      end;
+    end;
+  end;
 end;
 
 procedure TSwitchClient.OnLeaveCall(Sender: TObject; const Terminal: ITerminal;
     const Call: ICall);
+var
+  i: Integer;
+  line: ILine;
 begin
-  Send(terminal, call, 'call-leave');
+  with call.Inclusions do
+  begin
+    for i := 0 to Pred(Count) do
+    begin
+      if VarSupports(Item[i], ILine, line) then
+      begin
+        Send(line.Terminal, call, 'call-leave');
+      end;
+    end;
+  end;
+end;
+
+procedure TSwitchClient.OnDivertCall(Sender: TObject; const Terminal: ITerminal;
+    const Call: ICall);
+var
+  i: Integer;
+  line: ILine;
+begin
+  with call.Inclusions do
+  begin
+    for i := 0 to Pred(Count) do
+    begin
+      if Supports(Item[i], ILine, line) then
+      begin
+        case call.ExitState of
+           CALL_STATE_BUSY:
+             begin
+               Send(line.Terminal, call, 'call-busy');
+             end;
+           CALL_STATE_NOANSWER:
+             begin
+               Send(line.Terminal, call, 'call-noanswer');
+             end;
+        end;
+      end;
+    end;
+  end;
 end;
 
 procedure TSwitchClient.OnMakeCall(Sender: TObject; const Terminal: ITerminal;
     const Call: ICall);
 begin
-  Send(Terminal, Call, 'call-make');
   {
   if call.Automated_ then
   begin
@@ -335,16 +320,34 @@ begin
     Terminal.Clear;
   end;
   }
+  Send(Terminal, Call, 'call-make');
 end;
 
-procedure TSwitchClient.OnMessageReceived(AConnection: TPipeConnection;
-    AMessage: TPipeMessage);
+procedure TSwitchClient.OnReleaseCall(Sender: TObject; const Terminal:
+    ITerminal; const Call: ICall);
 var
-  X, Y, lResult: Double;
-  lFrom, lTo, lDTMF: string;
-  terminal: ITerminal;
+  i: Integer;
+  line: ILine;
 begin
-  
+
+  if call.Automated_ then
+  begin
+    Terminal.Clear;
+    Terminal.StopPlayVoice(MEDIA_STOP_ALL);
+  end;
+
+  Send(terminal, Call, 'call-release');
+
+  with call.Inclusions do
+  begin
+    for i := 0 to Pred(Count) do
+    begin
+      if Supports(Item[i], ILine, line) then
+      begin
+        Send(line.Terminal, call, 'call-release');
+      end;
+    end;
+  end;
 end;
 
 procedure TSwitchClient.OnOutgoingCall(Sender: TObject; const Terminal:
@@ -364,17 +367,6 @@ begin
   Send(Terminal, Call, 'call-proceed');
 end;
 
-procedure TSwitchClient.OnReleaseCall(Sender: TObject; const Terminal:
-    ITerminal; const Call: ICall);
-begin
-  Send(terminal, Call, 'call-release');
-
-  if call.Automated_ then
-  begin
-    Terminal.Clear;
-    Terminal.StopPlayVoice(MEDIA_STOP_ALL);
-  end;
-end;
 
 procedure TSwitchClient.OnRetrieveCall(Sender: TObject; const Terminal:
     ITerminal; const Call: ICall);
@@ -392,6 +384,12 @@ procedure TSwitchClient.OnStateChanged(Sender: TObject; const Terminal:
     ITerminal; oldState, newState: TERMINAL_STATE);
 begin
   Send(Terminal, oldState, newState, 'call-state');
+end;
+
+procedure TSwitchClient.OnMessageReceived(AConnection: TPipeConnection;
+    AMessage: TPipeMessage);
+begin
+  Send(AMessage.AsString);
 end;
 
 procedure TSwitchClient.Send(Content: string);
@@ -455,6 +453,20 @@ begin
   end;
 end;
 
+procedure TSwitchClient.Send(Terminal: ITerminal; RecordLog: IRecordLog; Topic: string);
+var
+  Msg: TPipeMessage;
+begin
+  Msg := TPipeMessage.Create(Topic, [], []);
+  try
+    MakeMessage(Msg, Terminal);
+    MakeMessage(Msg, RecordLog);
+    Send(Msg.AsString);
+  finally
+    Msg.Free;
+  end;
+end;
+
 procedure TSwitchClient.Send(Terminal: ITerminal; Call: ICall; Topic: string);
 var
   Msg: TPipeMessage;
@@ -485,16 +497,73 @@ begin
 end;
 
 
+procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; Address: IAddress);
+begin
+  AMessage.Data['name'] := Address.Name;
+  AMessage.Data['number'] := Address.Number;
+  AMessage.Data['state'] := UIntToStr(Address.State);
+  AMessage.Data['now'] := DateTimeToStr(Now);
+end;
 
+procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; Call: ICall);
+var
+  Log: ICallLog;
+begin
+  if Supports(Call, ICallLog, Log) then
+  begin
+    MakeMessage(AMessage, Log);
+  end;
+end;
 
+procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; CallLog: ICallLog);
+begin
+  AMessage.Data['instanceId'] := GuidToString(CallLog.InstanceId);
+  AMessage.Data['sessionId'] := CallLog.SessionId;
+  AMessage.Data['callerId'] := CallLog.CallerId;
+  AMessage.Data['calleeId'] := CallLog.CalleeId;
+  AMessage.Data['accessCode'] := CallLog.AccessCode;
+  AMessage.Data['exitState'] := UIntToStr(CallLog.ExitState);
+  AMessage.Data['direction'] := UIntToStr(CallLog.Direction);
+  AMessage.Data['start'] := DateTimeToStr(CallLog.StartTime);
+  AMessage.Data['end'] := DateTimeToStr(CallLog.EndTime);
+  AMessage.Data['wait'] := FloatToStrF(CallLog.WaitDuration,ffFixed,10,2);
+  AMessage.Data['talk'] := FloatToStrF(CallLog.TalkDuration,ffFixed,10,2);
+  AMessage.Data['now'] := DateTimeToStr(Now);
+end;
 
+procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; Line: ILine);
+begin
+  AMessage.Data['callerId'] := Line.CallerId;
+  AMessage.Data['calleeId'] := Line.CalleeId;
+  AMessage.Data['state'] := UIntToStr(Line.LineState);
+  MakeMessage(AMessage, Line.Address);
+  if Assigned(Line.ActiveCall) then
+  begin
+    MakeMessage(AMessage, Line.ActiveCall);
+  end;
+  AMessage.Data['now'] := DateTimeToStr(Now);
+end;
 
+procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; RecordLog: IRecordLog);
+begin
+  AMessage.Data['sessionId'] := RecordLog.SessionId;
+  AMessage.Data['start'] := DateTimeToStr(RecordLog.StartTime);
+  AMessage.Data['end'] := DateTimeToStr(RecordLog.EndTime);
+  AMessage.Data['audioFileName'] := RecordLog.AudioFileName;
+  AMessage.Data['now'] := DateTimeToStr(Now);
+end;
 
-
-
-
-
-
-
+procedure TSwitchClient.MakeMessage(AMessage: TPipeMessage; Terminal:
+    ITerminal);
+begin
+  AMessage.Data['name'] := Terminal.Name;
+  AMessage.Data['pad'] := Terminal.Pad;
+  AMessage.Data['sig'] := UIntToStr(Terminal.Sig);// GetEnumName(TypeInfo(SIGNALING), Terminal.Sig)
+  if Assigned(Terminal.ActiveLine) then
+  begin
+    MakeMessage(AMessage, Terminal.ActiveLine);
+  end;
+  AMessage.Data['now'] := DateTimeToStr(Now);
+end;
 
 end.

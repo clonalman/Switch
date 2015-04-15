@@ -46,7 +46,6 @@ type
     destructor Destroy; override;
     procedure Connect;
     procedure ConnectTest;
-    function CreateOverlapped: TOverlapped;
     procedure Disconnect;
     procedure Send(Content: string);
     property Connected: Boolean read GetConnected;
@@ -59,24 +58,25 @@ type
   private
     FConnection: TPipeConnection;
     FOverlapped: TOverlapped;
+    function ReadSize: Integer;
   public
     constructor Create(AConnection: TPipeConnection);
     destructor Destroy; override;
     procedure Read(AStream: TStream);
     function ReadString: string;
-    property Connection: TPipeConnection read FConnection;
   end;
 
   TPipeWriter = class(TObject)
   private
     FConnection: TPipeConnection;
     FOverlapped: TOverlapped;
+    procedure WriteSize(DataSize: Integer);
   public
     constructor Create(AConnection: TPipeConnection);
     destructor Destroy; override;
+    procedure Flush;
     procedure Write(AStream: TStream);
     procedure WriteString(AContent: string);
-    property Connection: TPipeConnection read FConnection;
   end;
 
 implementation
@@ -155,7 +155,7 @@ begin
         PIPE_ACCESS_DUPLEX or
         FILE_FLAG_OVERLAPPED,
         PIPE_TYPE_MESSAGE or      // message type pipe
-        PIPE_READMODE_BYTE or     // byte-read mode
+        PIPE_READMODE_MESSAGE or  // byte-read mode
         PIPE_WAIT,                // blocking mode
         PIPE_UNLIMITED_INSTANCES, // max. instances
         BufferSize,               // output buffer size
@@ -165,12 +165,6 @@ begin
 
     if (Result = INVALID_HANDLE_VALUE) then
       RaiseLastOSError;
-end;
-
-function TPipeConnection.CreateOverlapped: TOverlapped;
-begin
-  ZeroMemory(@Result, SizeOf(TOverlapped));
-  Result.hEvent := FOverlapped.hEvent;
 end;
 
 procedure TPipeConnection.Disconnect;
@@ -207,6 +201,7 @@ end;
 procedure TPipeConnection.Send(Content: string);
 begin
   Writer.WriteString(Content);
+  Writer.Flush;
 end;
 
 procedure TPipeConnection.SetError(const Value: Cardinal);
@@ -233,6 +228,7 @@ end;
 constructor TPipeWriter.Create(AConnection: TPipeConnection);
 begin
   FConnection := AConnection;
+  FOverlapped.hEvent := CreateEvent(nil, True, False, nil);
 end;
 
 destructor TPipeWriter.Destroy;
@@ -241,10 +237,41 @@ begin
   inherited;
 end;
 
+procedure TPipeWriter.Flush;
+begin
+  FlushFileBuffers(FConnection.PipeHandle);
+end;
+
+procedure TPipeWriter.WriteSize(DataSize: Integer);
+var
+  lBytesWritten: DWORD;
+begin
+  if not WriteFile(FConnection.PipeHandle, DataSize, SizeOf(DataSize), lBytesWritten, @FOverlapped) then
+  begin
+    case GetLastError of
+      ERROR_IO_PENDING:
+        begin
+          if WaitForSingleObject(FOverlapped.hEvent, INFINITE) = WAIT_OBJECT_0 then
+          begin
+            ResetEvent(FOverlapped.hEvent);
+            if not GetOverlappedResult(FConnection.PipeHandle, FOverlapped, lBytesWritten, True) then
+            begin
+              RaiseLastOSError;
+            end;
+          end else
+          begin
+            ResetEvent(FOverlapped.hEvent);
+          end;
+        end;
+    else
+      RaiseLastOSError;
+    end;
+  end;
+end;
+
 procedure TPipeWriter.Write(AStream: TStream);
 var
-  lBytesRead, lBytesWritten, dwLastError: DWORD;
-  lSuccess: BOOL;
+  lBytesRead, lBytesWritten: DWORD;
   lDataSize, lBufferSize: Integer;
   lBuffer: PChar;
 begin
@@ -252,53 +279,35 @@ begin
   GetMem(lBuffer, lBufferSize);
   try
     lDataSize := AStream.Size;
-    lSuccess := WriteFile(FConnection.PipeHandle, lDataSize, SizeOf(lDataSize), lBytesWritten, @FOverlapped);
-
-    if not lSuccess then
-    begin
-      dwLastError := GetLastError;
-      case dwLastError of
-        ERROR_BROKEN_PIPE: Exit;
-        ERROR_IO_PENDING: //正在发送数据
-        begin
-          if WAIT_OBJECT_0 = WaitForSingleObject(FOverlapped.hEvent, INFINITE) then
-          begin
-             ResetEvent(FOverlapped.hEvent);
-             lSuccess := GetOverlappedResult(FConnection.PipeHandle, FOverlapped, lBytesWritten, True);
-          end;
-          if not lSuccess then Exit;
-        end;
-      else
-        RaiseLastOSError;
-      end;
-    end;
-
+    WriteSize(lDataSize);
     while lDataSize > 0 do
     begin
       lBytesRead := AStream.Read(lBuffer^, lBufferSize);
       Dec(lDataSize, lBytesRead);
-      lSuccess := WriteFile(FConnection.PipeHandle, lBuffer^, lBytesRead, lBytesWritten, @FOverlapped);
 
-      if not lSuccess then
+      if not WriteFile(FConnection.PipeHandle, lBuffer^, lBytesRead, lBytesWritten, @FOverlapped) then
       begin
-        dwLastError := GetLastError;
-        case dwLastError of
-          ERROR_BROKEN_PIPE: Exit;
+        case GetLastError of
           ERROR_IO_PENDING:
-          begin
-            if WAIT_OBJECT_0 = WaitForSingleObject(FOverlapped.hEvent, INFINITE) then
             begin
-              ResetEvent(FOverlapped.hEvent);
-              lSuccess := GetOverlappedResult(FConnection.PipeHandle, FOverlapped, lBytesWritten, True);
+              if WaitForSingleObject(FOverlapped.hEvent, INFINITE) = WAIT_OBJECT_0 then
+              begin
+                ResetEvent(FOverlapped.hEvent);
+                if not GetOverlappedResult(FConnection.PipeHandle, FOverlapped, lBytesWritten, True) then
+                begin
+                  RaiseLastOSError;
+                end;
+              end else
+              begin
+                ResetEvent(FOverlapped.hEvent);
+              end;
             end;
-            if not lSuccess then RaiseLastOSError;
-          end;
         else
           RaiseLastOSError;
         end;
       end;
+      ZeroMemory(lBuffer, lBufferSize);
     end;
-    FlushFileBuffers(FConnection.PipeHandle);
   finally
     FreeMem(lBuffer);
   end;
@@ -335,64 +344,80 @@ begin
   inherited;
 end;
 
+function TPipeReader.ReadSize: Integer;
+var
+  lBytesRead: DWORD;
+begin
+  if not ReadFile(FConnection.PipeHandle, Result, SizeOf(Result), lBytesRead, @FOverlapped) then
+  begin
+    case GetLastError of
+      ERROR_IO_PENDING:
+        begin
+          if WaitForSingleObject(FOverlapped.hEvent, INFINITE) = WAIT_OBJECT_0 then
+          begin
+            ResetEvent(FOverlapped.hEvent);
+            if not GetOverlappedResult(FConnection.PipeHandle, FOverlapped, lBytesRead, True) then
+            begin
+               RaiseLastOSError;
+            end;
+          end else
+          begin
+            ResetEvent(FOverlapped.hEvent);
+          end;
+        end;
+      ERROR_BROKEN_PIPE: Exit;
+    else
+      RaiseLastOSError;
+    end;
+  end;
+end;
+
+
 procedure TPipeReader.Read(AStream: TStream);
 var
-  lBytesRead, dwLastError: DWORD;
-  lSuccess: BOOL;
+  lBytesRead: DWORD;
   lDataSize, lBufferSize: Integer;
   lBuffer: PChar;
 begin
   lBufferSize := FConnection.BufferSize;
+
   GetMem(lBuffer, lBufferSize);
   try
-    lSuccess := ReadFile(FConnection.PipeHandle, lDataSize, SizeOf(lDataSize), lBytesRead, @FOverlapped);
-
-    if not lSuccess then
-    begin
-      dwLastError := GetLastError;
-      case dwLastError of
-        ERROR_IO_PENDING:
-        begin
-          if WAIT_OBJECT_0 = WaitForSingleObject(FOverlapped.hEvent, INFINITE) then
-          begin
-             ResetEvent(FOverlapped.hEvent);
-             lSuccess := GetOverlappedResult(FConnection.PipeHandle, FOverlapped, lBytesRead, True);
-          end;
-          if not lSuccess then Exit;
-        end;
-        ERROR_BROKEN_PIPE: Exit;
-      else
-        RaiseLastOSError;
-      end;
-    end;
-
+    lDataSize := Self.ReadSize;
     while lDataSize > 0 do
     begin
-      lSuccess := ReadFile(FConnection.PipeHandle, lBuffer^, lBufferSize, lBytesRead, @FOverlapped);
-
-      if not lSuccess then
+      if not ReadFile(FConnection.PipeHandle, lBuffer^, lBufferSize, lBytesRead, @FOverlapped) then
       begin
-        dwLastError := GetLastError;
-        if dwLastError = ERROR_IO_PENDING then
-        begin
-          if WAIT_OBJECT_0 = WaitForSingleObject(FConnection.PipeHandle, INFINITE) then
-          begin
-             ResetEvent(FOverlapped.hEvent);
-             lSuccess := GetOverlappedResult(FConnection.PipeHandle, FOverlapped, lBytesRead, True);
-          end;
-          if not lSuccess then RaiseLastOSError;
-        end else
-        if dwLastError <> ERROR_MORE_DATA then RaiseLastOSError;
+        case GetLastError of
+          ERROR_BROKEN_PIPE: Break;
+          ERROR_MORE_DATA:;
+          ERROR_IO_PENDING:
+            begin
+              if WaitForSingleObject(FOverlapped.hEvent, INFINITE) = WAIT_OBJECT_0 then
+              begin
+                ResetEvent(FOverlapped.hEvent);
+                if not GetOverlappedResult(FConnection.PipeHandle, FOverlapped, lBytesRead, True) then
+                begin
+                  RaiseLastOSError;
+                end;
+              end else
+              begin
+                ResetEvent(FOverlapped.hEvent);
+              end;
+            end;
+        else
+          RaiseLastOSError;
+        end;
       end;
 
       if lBytesRead > 0 then
+      begin
         AStream.Write(lBuffer^, lBytesRead);
+        Dec(lDataSize, lBytesRead);
+      end;
 
-      Dec(lDataSize, lBytesRead);
+      ZeroMemory(lBuffer, lBufferSize);
     end;
-
-    if not lSuccess then
-      RaiseLastOSError;
   finally
     FreeMem(lBuffer);
   end;
@@ -413,7 +438,7 @@ begin
         SetLength(lData, lReadStream.Size);
         lReadStream.Position := 0;
         lReadStream.Read(lData[1], Length(lData));
-        Result := lData;
+        Result := string(lData);
       end;
     except
       on E: EOSError do

@@ -158,7 +158,7 @@ end;
 }
 procedure TPipeThreadWorker.DoExecute;
 var
-  lData: AnsiString;
+  lData: Utf8String;
   lLock: TList;
   lReadStream: TMemoryStream;
   lMessage: TPipeMessage;
@@ -177,7 +177,7 @@ begin
             lReadStream.Read(lData[1], Length(lData));
           end else Break;
         except
-          on E: EOSError do raise;
+          Break;
         end;
       finally
         lReadStream.Free;

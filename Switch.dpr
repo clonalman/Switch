@@ -27,14 +27,14 @@ uses
   uPipeConnection in 'uPipeConnection.pas';
 
 {$R *.RES}
-var
-  Started, Stopped: Boolean;
+//var
+//  Started, Stopped: Boolean;
 
 begin
   Application.Initialize;
-  Application.CreateForm(TSwitchService, ASwitchService);
-  ASwitchService.ServiceStart(ASwitchService, Started);
-  ASwitchService.ServiceExecute(ASwitchService);
-  ASwitchService.ServiceStop(ASwitchService, Stopped);
-  //Application.Run;
+  Application.CreateForm(TSwitchService, SwitchService);
+  //SwitchService.ServiceStart(SwitchService, Started);
+  //SwitchService.ServiceExecute(SwitchService);
+  //SwitchService.ServiceStop(SwitchService, Stopped);
+  Application.Run;
 end.

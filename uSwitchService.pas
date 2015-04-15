@@ -21,7 +21,7 @@ type
   end;
 
 var
-  ASwitchService: TSwitchService;
+  SwitchService: TSwitchService;
 
 implementation
 
@@ -36,7 +36,7 @@ const
 
 procedure ServiceController(CtrlCode: DWord); stdcall;
 begin
-  ASwitchService.Controller(CtrlCode);
+  SwitchService.Controller(CtrlCode);
 end;
 
 {
